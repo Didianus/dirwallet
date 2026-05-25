@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-helper";
 import { db } from "@/lib/db";
 
-// GET /api/stats - Get financial statistics
+// GET /api/stats - Get financial statistics (optimized)
 export async function GET() {
   try {
     const user = await getSessionUser();
@@ -35,117 +35,158 @@ export async function GET() {
     const monthStart = new Date(currentYear, currentMonth, 1);
     const monthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
-    // Start and end of current year
-    const yearStart = new Date(currentYear, 0, 1);
-    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
-
-    // Total income this month
-    const incomeThisMonth = await db.transaction.aggregate({
-      where: {
-        userId: user.id,
-        type: "income",
-        status: "completed",
-        date: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { amount: true },
-    });
-
-    // Total expense this month
-    const expenseThisMonth = await db.transaction.aggregate({
-      where: {
-        userId: user.id,
-        type: "expense",
-        status: "completed",
-        date: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { amount: true },
-    });
-
-    // Daily stats for current month (for chart)
-    const dailyStats = [];
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dayStart = new Date(currentYear, currentMonth, day);
-      const dayEnd = new Date(currentYear, currentMonth, day, 23, 59, 59, 999);
-
-      const dayIncome = await db.transaction.aggregate({
+    // Run all independent queries in parallel
+    const [
+      incomeThisMonth,
+      expenseThisMonth,
+      allMonthTransactions,
+      allYearTransactions,
+      categoryBreakdown,
+      recentTransactions,
+    ] = await Promise.all([
+      // Total income this month
+      db.transaction.aggregate({
         where: {
           userId: user.id,
           type: "income",
           status: "completed",
-          date: { gte: dayStart, lte: dayEnd },
+          date: { gte: monthStart, lte: monthEnd },
         },
         _sum: { amount: true },
-      });
+      }),
 
-      const dayExpense = await db.transaction.aggregate({
+      // Total expense this month
+      db.transaction.aggregate({
         where: {
           userId: user.id,
           type: "expense",
           status: "completed",
-          date: { gte: dayStart, lte: dayEnd },
+          date: { gte: monthStart, lte: monthEnd },
         },
         _sum: { amount: true },
-      });
+      }),
 
-      dailyStats.push({
-        date: dayStart.toISOString().split("T")[0],
-        day,
-        income: dayIncome._sum.amount || 0,
-        expense: dayExpense._sum.amount || 0,
-      });
+      // All completed transactions this month (for daily stats)
+      db.transaction.findMany({
+        where: {
+          userId: user.id,
+          status: "completed",
+          date: { gte: monthStart, lte: monthEnd },
+        },
+        select: {
+          type: true,
+          amount: true,
+          date: true,
+        },
+        orderBy: { date: "asc" },
+      }),
+
+      // All completed transactions this year (for monthly stats)
+      db.transaction.findMany({
+        where: {
+          userId: user.id,
+          status: "completed",
+          date: {
+            gte: new Date(currentYear, 0, 1),
+            lte: new Date(currentYear, 11, 31, 23, 59, 59, 999),
+          },
+        },
+        select: {
+          type: true,
+          amount: true,
+          date: true,
+        },
+        orderBy: { date: "asc" },
+      }),
+
+      // Category breakdown (current month)
+      db.transaction.groupBy({
+        by: ["categoryId"],
+        where: {
+          userId: user.id,
+          status: "completed",
+          date: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Recent transactions (last 5)
+      db.transaction.findMany({
+        where: { userId: user.id },
+        include: { category: true },
+        orderBy: { date: "desc" },
+        take: 5,
+      }),
+    ]);
+
+    // Process daily stats from the month's transactions
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const dailyStatsMap = new Map<string, { income: number; expense: number }>();
+
+    // Initialize all days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = new Date(currentYear, currentMonth, day)
+        .toISOString()
+        .split("T")[0];
+      dailyStatsMap.set(dateStr, { income: 0, expense: 0 });
     }
 
-    // Monthly stats for current year (for chart)
-    const monthlyStats = [];
+    // Aggregate from fetched transactions
+    for (const tx of allMonthTransactions) {
+      const dateStr = new Date(tx.date).toISOString().split("T")[0];
+      const existing = dailyStatsMap.get(dateStr);
+      if (existing) {
+        if (tx.type === "income") {
+          existing.income += tx.amount;
+        } else {
+          existing.expense += tx.amount;
+        }
+      }
+    }
+
+    const dailyStats = Array.from(dailyStatsMap.entries()).map(
+      ([dateStr, data], index) => ({
+        date: dateStr,
+        day: index + 1,
+        income: data.income,
+        expense: data.expense,
+      })
+    );
+
+    // Process monthly stats from the year's transactions
     const monthNames = [
       "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
       "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
     ];
 
-    for (let month = 0; month <= currentMonth; month++) {
-      const mStart = new Date(currentYear, month, 1);
-      const mEnd = new Date(currentYear, month + 1, 0, 23, 59, 59, 999);
+    const monthlyStatsMap = new Map<number, { income: number; expense: number }>();
 
-      const mIncome = await db.transaction.aggregate({
-        where: {
-          userId: user.id,
-          type: "income",
-          status: "completed",
-          date: { gte: mStart, lte: mEnd },
-        },
-        _sum: { amount: true },
-      });
-
-      const mExpense = await db.transaction.aggregate({
-        where: {
-          userId: user.id,
-          type: "expense",
-          status: "completed",
-          date: { gte: mStart, lte: mEnd },
-        },
-        _sum: { amount: true },
-      });
-
-      monthlyStats.push({
-        month: monthNames[month],
-        monthIndex: month,
-        income: mIncome._sum.amount || 0,
-        expense: mExpense._sum.amount || 0,
-      });
+    // Initialize months up to current month
+    for (let m = 0; m <= currentMonth; m++) {
+      monthlyStatsMap.set(m, { income: 0, expense: 0 });
     }
 
-    // Category breakdown (for pie chart) - current month
-    const categoryBreakdown = await db.transaction.groupBy({
-      by: ["categoryId"],
-      where: {
-        userId: user.id,
-        status: "completed",
-        date: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { amount: true },
-    });
+    // Aggregate from fetched transactions
+    for (const tx of allYearTransactions) {
+      const txMonth = new Date(tx.date).getMonth();
+      const existing = monthlyStatsMap.get(txMonth);
+      if (existing) {
+        if (tx.type === "income") {
+          existing.income += tx.amount;
+        } else {
+          existing.expense += tx.amount;
+        }
+      }
+    }
+
+    const monthlyStats = Array.from(monthlyStatsMap.entries()).map(
+      ([monthIndex, data]) => ({
+        month: monthNames[monthIndex],
+        monthIndex,
+        income: data.income,
+        expense: data.expense,
+      })
+    );
 
     // Get category details for breakdown
     const categoriesWithAmount = await Promise.all(
@@ -163,14 +204,6 @@ export async function GET() {
         };
       })
     );
-
-    // Recent transactions (last 5)
-    const recentTransactions = await db.transaction.findMany({
-      where: { userId: user.id },
-      include: { category: true },
-      orderBy: { date: "desc" },
-      take: 5,
-    });
 
     return NextResponse.json({
       totalBalance: wallet.balance,

@@ -43,33 +43,35 @@ export function DeleteConfirmationDialog({
             <Trash2 className="h-5 w-5 text-red-500" />
             Hapus Transaksi
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <p>
-              Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini
-              tidak dapat dibatalkan.
-            </p>
-            <div className="rounded-lg bg-muted p-3">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {transaction.description || transaction.category?.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {transaction.category?.icon}{' '}
-                    {transaction.category?.name}
-                  </p>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <p>
+                Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini
+                tidak dapat dibatalkan.
+              </p>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {transaction.description || transaction.category?.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {transaction.category?.icon}{' '}
+                      {transaction.category?.name}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      'text-sm font-semibold ml-3',
+                      isIncome
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    )}
+                  >
+                    {isIncome ? '+' : '-'}
+                    {formatCurrency(transaction.amount)}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    'text-sm font-semibold ml-3',
-                    isIncome
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  )}
-                >
-                  {isIncome ? '+' : '-'}
-                  {formatCurrency(transaction.amount)}
-                </span>
               </div>
             </div>
           </AlertDialogDescription>
