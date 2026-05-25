@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { signIn, signOut } from 'next-auth/react'
 import type { User } from '@/types'
 
 interface AuthState {
@@ -21,15 +22,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const res = await fetch('/api/auth/signin/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
       })
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        set({ isLoading: false, error: data.error || 'Login gagal. Periksa email dan password.' })
+      if (result?.error) {
+        set({ isLoading: false, error: result.error })
+        return false
+      }
+
+      if (!result?.ok) {
+        set({ isLoading: false, error: 'Login gagal. Periksa email dan password.' })
         return false
       }
 
@@ -68,7 +73,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   logout: async () => {
     set({ isLoading: true, error: null })
     try {
-      await fetch('/api/auth/signout', { method: 'POST' })
+      await signOut({ redirect: false })
     } catch {
       // Continue logout even if API call fails
     } finally {

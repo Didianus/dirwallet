@@ -404,3 +404,24 @@ Stage Summary:
 - Sidebar properly separated for mobile/desktop
 - Database seeded with demo users and transactions
 - App fully functional with 0 ESLint errors
+
+---
+Task ID: 13
+Agent: Main Orchestrator
+Task: Fix login authentication - users cannot sign in with provided accounts
+
+Work Log:
+- Investigated login failure: auth-store used raw `fetch('/api/auth/signin/credentials')` with JSON body, but NextAuth v4 requires CSRF token and proper form encoding
+- Verified users exist in database with correct password hashes (admin@finwallet.com/admin123, user@finwallet.com/user123)
+- Tested NextAuth callback endpoint directly with curl - confirmed backend works correctly when using `/api/auth/callback/credentials` with proper CSRF token
+- Fixed `/src/store/auth-store.ts`: replaced raw fetch login with `signIn('credentials', { redirect: false, email, password })` from `next-auth/react`
+- Fixed `/src/store/auth-store.ts`: replaced raw fetch logout with `signOut({ redirect: false })` from `next-auth/react`
+- Added `SessionProvider` from `next-auth/react` to `/src/components/providers.tsx`
+- Created `/src/types/next-auth.d.ts` with type declarations for `id` and `role` on session user
+- ESLint: 0 errors, 2 warnings (known react-hook-form issue)
+
+Stage Summary:
+- Root cause: raw fetch to NextAuth endpoint missing CSRF token handling
+- Fix: use official `signIn`/`signOut` from `next-auth/react` which handles CSRF automatically
+- Added SessionProvider to providers tree for proper session management
+- Login now works with admin@finwallet.com/admin123 and user@finwallet.com/user123
