@@ -41,7 +41,7 @@ import { toast } from 'sonner'
 
 const transactionSchema = z.object({
   type: z.enum(['income', 'expense']),
-  amount: z.coerce.number().min(1, 'Jumlah harus lebih dari 0'),
+  amount: z.coerce.number().positive('Jumlah harus lebih dari 0'),
   description: z.string().min(1, 'Deskripsi wajib diisi'),
   categoryId: z.string().min(1, 'Kategori wajib dipilih'),
   date: z.string().min(1, 'Tanggal wajib dipilih'),
@@ -68,7 +68,7 @@ export function AddTransaction() {
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       type: 'expense',
-      amount: 0,
+      amount: undefined,
       description: '',
       categoryId: '',
       date: new Date().toISOString().split('T')[0],
@@ -88,10 +88,11 @@ export function AddTransaction() {
 
   const watchDate = watch('date')
 
-  // Reset category when type changes
-  useEffect(() => {
+  const handleTypeChange = (type: 'income' | 'expense') => {
+    setTransactionType(type)
+    setValue('type', type)
     setValue('categoryId', '')
-  }, [transactionType, setValue])
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -117,6 +118,11 @@ export function AddTransaction() {
   }
 
   const onSubmit = async (data: TransactionFormData) => {
+    if (!data.amount || data.amount <= 0) {
+      toast.error('Jumlah harus lebih dari 0')
+      return
+    }
+
     const result = await addTransaction({
       type: data.type,
       amount: data.amount,
@@ -135,9 +141,11 @@ export function AddTransaction() {
       )
       reset()
       setProofPreview(null)
+      setTransactionType('expense')
       setActiveView('transactions')
     } else {
-      toast.error('Gagal menambahkan transaksi. Silakan coba lagi.')
+      const error = useTransactionStore.getState().error
+      toast.error(error || 'Gagal menambahkan transaksi. Silakan coba lagi.')
     }
   }
 
@@ -176,10 +184,7 @@ export function AddTransaction() {
             />
             <button
               type="button"
-              onClick={() => {
-                setTransactionType('income')
-                setValue('type', 'income')
-              }}
+              onClick={() => handleTypeChange('income')}
               className={cn(
                 'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isIncome ? 'text-white' : 'text-muted-foreground'
@@ -190,10 +195,7 @@ export function AddTransaction() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setTransactionType('expense')
-                setValue('type', 'expense')
-              }}
+              onClick={() => handleTypeChange('expense')}
               className={cn(
                 'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 !isIncome ? 'text-white' : 'text-muted-foreground'
@@ -237,7 +239,7 @@ export function AddTransaction() {
                   type="number"
                   placeholder="0"
                   className="pl-10 text-lg font-semibold h-12"
-                  {...register('amount')}
+                  {...register('amount', { valueAsNumber: true })}
                 />
               </div>
               {errors.amount && (

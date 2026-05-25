@@ -58,7 +58,7 @@ const editSchema = z.object({
 type EditFormData = z.infer<typeof editSchema>
 
 interface EditTransactionDialogProps {
-  transaction: Transaction
+  transaction: Transaction | null
   open: boolean
   onClose: () => void
 }
@@ -70,32 +70,34 @@ export function EditTransactionDialog({
 }: EditTransactionDialogProps) {
   const { updateTransaction, isLoading } = useTransactionStore()
   const { categories, fetchCategories } = useCategoryStore()
-  const [transactionType, setTransactionType] = useState<'income' | 'expense'>(
-    transaction.type
-  )
-  const [proofPreview, setProofPreview] = useState<string | null>(
-    transaction.proofImage
-  )
+  const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense')
+  const [proofPreview, setProofPreview] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchCategories()
-  }, [fetchCategories])
+    if (open && transaction) {
+      fetchCategories()
+      setTransactionType(transaction.type as 'income' | 'expense')
+      setProofPreview(transaction.proofImage)
+    }
+  }, [open, transaction, fetchCategories])
 
   const filteredCategories = categories.filter((c) => c.type === transactionType)
 
   const form = useForm<EditFormData>({
     resolver: zodResolver(editSchema),
-    defaultValues: {
-      type: transaction.type,
-      amount: transaction.amount,
-      description: transaction.description,
-      categoryId: transaction.categoryId,
-      date: transaction.date
-        ? new Date(transaction.date).toISOString().split('T')[0]
-        : '',
-      status: transaction.status,
-      proofImage: transaction.proofImage,
-    },
+    values: transaction
+      ? {
+          type: transaction.type as 'income' | 'expense',
+          amount: transaction.amount,
+          description: transaction.description,
+          categoryId: transaction.categoryId,
+          date: transaction.date
+            ? new Date(transaction.date).toISOString().split('T')[0]
+            : '',
+          status: transaction.status as 'completed' | 'pending' | 'cancelled',
+          proofImage: transaction.proofImage,
+        }
+      : undefined,
   })
 
   const {
@@ -107,10 +109,6 @@ export function EditTransactionDialog({
   } = form
 
   const watchDate = watch('date')
-
-  useEffect(() => {
-    setValue('categoryId', '')
-  }, [transactionType, setValue])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -136,6 +134,8 @@ export function EditTransactionDialog({
   }
 
   const onSubmit = async (data: EditFormData) => {
+    if (!transaction) return
+
     const result = await updateTransaction(transaction.id, {
       type: data.type,
       amount: data.amount,
@@ -190,6 +190,7 @@ export function EditTransactionDialog({
             onClick={() => {
               setTransactionType('income')
               setValue('type', 'income')
+              setValue('categoryId', '')
             }}
             className={cn(
               'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors',
@@ -204,6 +205,7 @@ export function EditTransactionDialog({
             onClick={() => {
               setTransactionType('expense')
               setValue('type', 'expense')
+              setValue('categoryId', '')
             }}
             className={cn(
               'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors',

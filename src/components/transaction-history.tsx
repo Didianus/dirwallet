@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -90,13 +90,21 @@ export function TransactionHistory() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
+  // Track if this is the initial load
+  const initialLoadDone = useRef(false)
+
   useEffect(() => {
     fetchCategories()
   }, [fetchCategories])
 
+  // Fetch transactions on mount and when filters change
+  // Use JSON.stringify to create a stable dependency for the filters object
+  const filtersKey = JSON.stringify(filters)
+
   useEffect(() => {
     fetchTransactions(1)
-  }, [filters, fetchTransactions])
+    initialLoadDone.current = true
+  }, [filtersKey, fetchTransactions])
 
   // Debounced search
   const [searchInput, setSearchInput] = useState(filters.search)
@@ -599,7 +607,7 @@ export function TransactionHistory() {
                 </TableRow>
               ) : (
                 <AnimatePresence>
-                  {transactions.map((transaction, index) => (
+                  {transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell className="text-sm">
                         {format(new Date(transaction.date), 'dd MMM yyyy')}
@@ -748,7 +756,7 @@ export function TransactionHistory() {
 
       {/* Dialogs */}
       <EditTransactionDialog
-        transaction={editingTransaction!}
+        transaction={editingTransaction}
         open={!!editingTransaction}
         onClose={() => setEditingTransaction(null)}
       />
