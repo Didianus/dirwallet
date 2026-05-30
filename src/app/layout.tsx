@@ -15,10 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FinWallet - Smart Financial Tracker",
-  description: "Track your finances, manage transactions, and stay on top of your budget with FinWallet.",
-  keywords: ["FinWallet", "e-wallet", "financial tracker", "budget", "finance"],
-  authors: [{ name: "FinWallet Team" }],
+  title: "DirWallet - Smart Financial Tracker",
+  description:
+    "Track your finances, manage transactions, and stay on top of your budget with DirWallet.",
+  keywords: ["DirWallet", "e-wallet", "financial tracker", "budget", "finance"],
+  authors: [{ name: "DirWallet Team" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
